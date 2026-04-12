@@ -1,20 +1,17 @@
+/**
+ * App.tsx — Entry point
+ *
+ * Renders the status bar and the single screen of this app.
+ * The app has no navigation stack — PoseCameraScreen is the whole app.
+ */
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import PoseCameraScreen from './screens/PoseCameraScreen';
 
 export default function App() {
   return (
-    <View style={styles.container}>
-      <Text>Open up App.tsx to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
+    <>
+      <StatusBar style="light" />
+      <PoseCameraScreen />
+    </>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});

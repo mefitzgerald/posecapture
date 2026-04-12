@@ -1,0 +1,308 @@
+/**
+ * PoseCameraScreen.tsx — Main screen of the pose capture app.
+ *
+ * Flow:
+ *   1. CAMERA MODE  — Live camera preview. Tap "Detect" to capture a photo and
+ *                     run ML Kit pose detection on it.
+ *   2. PREVIEW MODE — Shows the captured photo with the skeleton overlay drawn
+ *                     on top. Tap "Save" to write the composite image to the
+ *                     device gallery, or "Back" to return to the camera.
+ *
+ * The skeleton overlay is an SVG layer rendered over the photo. Landmark
+ * coordinates from ML Kit are in image-pixel space, so they are scaled to
+ * screen space using a "cover" transform that matches how the camera preview
+ * fills the screen.
+ */
+import React, { useCallback, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  Image,
+  LayoutChangeEvent,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { Camera, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
+import * as MediaLibrary from 'expo-media-library';
+import Svg, { Circle, Line } from 'react-native-svg';
+import ViewShot from 'react-native-view-shot';
+import { PoseDetection, POSE_CONNECTIONS } from '../modules/my-module';
+import type { PoseLandmark } from '../modules/my-module';
+
+// Seed the layout state with screen dimensions so scaling works before
+// the first onLayout event fires.
+const SCREEN = Dimensions.get('window');
+
+type Mode = 'camera' | 'preview';
+
+export default function PoseCameraScreen() {
+  // Camera permissions (vision-camera) and media library permissions (saving)
+  const { hasPermission, requestPermission } = useCameraPermission();
+  const [mediaPermission, requestMediaPermission] = MediaLibrary.usePermissions();
+
+  // facing controls which physical camera is used; device is the resolved handle
+  const [facing, setFacing] = useState<'back' | 'front'>('back');
+  const device = useCameraDevice(facing);
+
+  const cameraRef = useRef<Camera>(null);
+  const viewShotRef = useRef<ViewShot>(null);
+
+  // App state
+  const [mode, setMode] = useState<Mode>('camera');
+  const [photoUri, setPhotoUri] = useState<string>('');
+  const [landmarks, setLandmarks] = useState<PoseLandmark[]>([]);
+  const [imageSize, setImageSize] = useState({ width: 1, height: 1 });
+  const [viewLayout, setViewLayout] = useState({ width: SCREEN.width, height: SCREEN.height });
+  const [detecting, setDetecting] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  /**
+   * Captures a still photo and runs ML Kit pose detection on it.
+   * On success, transitions to preview mode with the photo and landmarks set.
+   */
+  const handleDetect = useCallback(async () => {
+    if (!cameraRef.current || detecting) return;
+    setDetecting(true);
+    try {
+      const photo = await cameraRef.current.takePhoto({ flash: 'off' });
+
+      // vision-camera returns a bare file path on Android — ensure it has the
+      // file:// scheme so Android APIs (ML Kit, Image component) can load it.
+      const uri = photo.path.startsWith('file://') ? photo.path : `file://${photo.path}`;
+
+      const results = await PoseDetection.detectPose(uri);
+
+      setPhotoUri(uri);
+      setImageSize({ width: photo.width, height: photo.height });
+      setLandmarks(results);
+      setMode('preview');
+    } catch (e: any) {
+      Alert.alert('Detection failed', e?.message ?? 'Unknown error');
+    } finally {
+      setDetecting(false);
+    }
+  }, [detecting]);
+
+  /**
+   * Captures the preview ViewShot (photo + SVG skeleton) as a single JPEG
+   * and saves it to the device media library.
+   */
+  const handleSave = async () => {
+    if (!viewShotRef.current || saving) return;
+    if (!mediaPermission?.granted) await requestMediaPermission();
+    setSaving(true);
+    try {
+      const uri = await (viewShotRef.current as any).capture();
+      await MediaLibrary.saveToLibraryAsync(uri);
+      Alert.alert('Saved', 'Image saved to your gallery.');
+    } catch (e: any) {
+      Alert.alert('Error', e.message ?? 'Could not save image.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Track the rendered size of the root view so the overlay scales correctly.
+  const onViewLayout = (e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    setViewLayout({ width, height });
+  };
+
+  // ── Landmark scaling ────────────────────────────────────────────────────────
+  //
+  // ML Kit reads EXIF rotation and returns landmarks in the visually-correct
+  // (portrait) image space. However, the raw photo dimensions from vision-camera
+  // on Android may still be landscape (width > height from the sensor), so we
+  // swap them to get the effective portrait dimensions.
+  //
+  // We then apply a "cover" scale — the same transform the camera preview uses
+  // to fill the screen — so that landmark positions align with what the user
+  // sees in both the live preview and the static photo.
+  const isLandscape = imageSize.width > imageSize.height;
+  const effectiveW = isLandscape ? imageSize.height : imageSize.width;
+  const effectiveH = isLandscape ? imageSize.width : imageSize.height;
+
+  const viewW = viewLayout.width;
+  const viewH = viewLayout.height;
+
+  // Scale factor that makes the image fill the full view (cover behaviour)
+  const coverScale = Math.max(viewW / effectiveW, viewH / effectiveH);
+
+  // How many pixels of the image are cropped from each side after scaling
+  const cropOffsetX = (effectiveW * coverScale - viewW) / 2;
+  const cropOffsetY = (effectiveH * coverScale - viewH) / 2;
+
+  const scaleX = (x: number) => x * coverScale - cropOffsetX;
+  const scaleY = (y: number) => y * coverScale - cropOffsetY;
+
+  // Only render landmarks the model is confident are visible in the frame
+  const visibleLandmarks = landmarks.filter(lm => lm.inFrameLikelihood > 0.5);
+  const landmarkMap = new Map(visibleLandmarks.map(lm => [lm.type, lm]));
+
+  // ── Permission gates ────────────────────────────────────────────────────────
+
+  if (!hasPermission) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.message}>Camera permission is required.</Text>
+        <TouchableOpacity style={styles.btn} onPress={requestPermission}>
+          <Text style={styles.btnText}>Grant Permission</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (!device) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.message}>No camera device found.</Text>
+      </View>
+    );
+  }
+
+  const isPreview = mode === 'preview';
+
+  return (
+    <View style={styles.container} onLayout={onViewLayout}>
+
+      {/*
+        Camera is always mounted so vision-camera can release the hardware
+        gracefully. isActive=false pauses the feed without unmounting.
+      */}
+      <Camera
+        ref={cameraRef}
+        style={[styles.camera, isPreview && styles.hidden]}
+        device={device}
+        isActive={!isPreview}
+        photo={true}
+      />
+
+      {/* Preview: captured photo with SVG skeleton drawn on top */}
+      {isPreview && (
+        <ViewShot
+          ref={viewShotRef}
+          style={{ width: viewW, height: viewH }}
+          options={{ format: 'jpg', quality: 0.95 }}
+        >
+          <Image
+            source={{ uri: photoUri }}
+            style={StyleSheet.absoluteFill}
+            resizeMode="cover"
+          />
+
+          {/* SVG overlay — red lines for bones, cyan dots for joints */}
+          <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
+            {POSE_CONNECTIONS.map(([a, b], i) => {
+              const lmA = landmarkMap.get(a);
+              const lmB = landmarkMap.get(b);
+              if (!lmA || !lmB) return null;
+              return (
+                <Line
+                  key={`line-${i}`}
+                  x1={scaleX(lmA.x)} y1={scaleY(lmA.y)}
+                  x2={scaleX(lmB.x)} y2={scaleY(lmB.y)}
+                  stroke="#FF3D00"
+                  strokeWidth={3}
+                  strokeLinecap="round"
+                />
+              );
+            })}
+            {visibleLandmarks.map(lm => (
+              <Circle
+                key={`dot-${lm.type}`}
+                cx={scaleX(lm.x)}
+                cy={scaleY(lm.y)}
+                r={6}
+                fill="#00E5FF"
+                stroke="#ffffff"
+                strokeWidth={1.5}
+              />
+            ))}
+          </Svg>
+        </ViewShot>
+      )}
+
+      {/* Control bar — buttons swap depending on current mode */}
+      <View style={styles.controls}>
+        {isPreview ? (
+          <>
+            <TouchableOpacity style={styles.iconBtn} onPress={() => setMode('camera')}>
+              <Text style={styles.iconText}>Back</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.saveBtn, saving && styles.actionBtnBusy]}
+              onPress={handleSave}
+              disabled={saving}
+            >
+              {saving
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={styles.actionBtnText}>Save</Text>}
+            </TouchableOpacity>
+            <View style={styles.iconBtn}>
+              <Text style={styles.badgeText}>{visibleLandmarks.length} pts</Text>
+            </View>
+          </>
+        ) : (
+          <>
+            <TouchableOpacity
+              style={styles.iconBtn}
+              onPress={() => setFacing(f => (f === 'back' ? 'front' : 'back'))}
+            >
+              <Text style={styles.iconText}>Flip</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.detectBtn, detecting && styles.actionBtnBusy]}
+              onPress={handleDetect}
+              disabled={detecting}
+            >
+              {detecting
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={styles.actionBtnText}>Detect</Text>}
+            </TouchableOpacity>
+            {/* Spacer keeps the Detect button centred */}
+            <View style={styles.iconBtn} />
+          </>
+        )}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#000' },
+  camera:    { flex: 1 },
+  // Hides the camera view without unmounting it
+  hidden:    { display: 'none' },
+  center:    { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
+  message:   { fontSize: 16, textAlign: 'center', marginBottom: 16 },
+
+  controls: {
+    position: 'absolute',
+    bottom: 40,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    paddingHorizontal: 32,
+  },
+
+  // Primary action buttons (Detect / Save)
+  actionBtn:     { paddingVertical: 16, paddingHorizontal: 32, borderRadius: 36, alignItems: 'center', justifyContent: 'center' },
+  detectBtn:     { backgroundColor: '#00E5FF' },
+  saveBtn:       { backgroundColor: '#00C853' },
+  actionBtnBusy: { opacity: 0.5 },
+  actionBtnText: { color: '#fff', fontSize: 18, fontWeight: '700' },
+
+  // Small circular buttons (Flip / Back / badge)
+  iconBtn:   { width: 56, height: 56, borderRadius: 28, backgroundColor: '#00000066', alignItems: 'center', justifyContent: 'center' },
+  iconText:  { color: '#fff', fontSize: 12, fontWeight: '600' },
+  badgeText: { color: '#00E5FF', fontSize: 12, fontWeight: '600' },
+
+  // Permission screen
+  btn:     { backgroundColor: '#00E5FF', paddingVertical: 12, paddingHorizontal: 24, borderRadius: 8 },
+  btnText: { fontWeight: '700', fontSize: 15 },
+});
