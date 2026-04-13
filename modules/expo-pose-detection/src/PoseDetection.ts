@@ -1,12 +1,12 @@
 /**
- * modules/my-module/src/MyModule.ts — TypeScript wrapper for the native module.
+ * modules/my-module/src/PoseDetection.ts — TypeScript wrapper for the native module.
  *
  * requireNativeModule('PoseDetection') loads the Kotlin class registered under
- * that name in MyModule.kt. This declaration tells TypeScript what methods and
+ * that name in PoseDetectionModule.kt. This declaration tells TypeScript what methods and
  * types it exposes so we get type checking and autocomplete in the rest of the app.
  */
 import { NativeModule, requireNativeModule } from 'expo';
-import { PoseLandmark } from './MyModule.types';
+import { PoseLandmark } from './PoseDetection.types';
 
 declare class PoseDetectionModule extends NativeModule {
   /**

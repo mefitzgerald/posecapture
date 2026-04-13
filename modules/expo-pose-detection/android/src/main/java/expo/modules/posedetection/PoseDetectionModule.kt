@@ -1,5 +1,5 @@
 /**
- * MyModule.kt — Native Expo module that wraps Google ML Kit Pose Detection.
+ * PoseDetectionModule.kt — Native Expo module that wraps Google ML Kit Pose Detection.
  *
  * This is the Android-side "native code" of the app. It registers a module
  * called "PoseDetection" that JavaScript can call via the Expo Modules API.
@@ -15,7 +15,7 @@
  * landmarks are always returned in the visually-correct (upright) image space
  * regardless of how the raw sensor stored the pixels.
  */
-package expo.modules.mymodule
+package expo.modules.posedetection
 
 import android.net.Uri
 import com.google.mlkit.vision.common.InputImage
@@ -25,7 +25,7 @@ import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
-class MyModule : Module() {
+class PoseDetectionModule : Module() {
   override fun definition() = ModuleDefinition {
 
     // The name JavaScript uses to require this module:

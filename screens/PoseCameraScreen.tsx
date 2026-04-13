@@ -27,10 +27,10 @@ import {
 } from 'react-native';
 import { Camera, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
 import * as MediaLibrary from 'expo-media-library';
-import Svg, { Circle, Line } from 'react-native-svg';
+import Svg, { Circle, Line, Text as SvgText } from 'react-native-svg';
 import ViewShot from 'react-native-view-shot';
-import { PoseDetection, POSE_CONNECTIONS } from '../modules/my-module';
-import type { PoseLandmark } from '../modules/my-module';
+import { PoseDetection, POSE_CONNECTIONS, getPoseAngles } from '../modules/expo-pose-detection';
+import type { PoseLandmark } from '../modules/expo-pose-detection';
 
 // Seed the layout state with screen dimensions so scaling works before
 // the first onLayout event fires.
@@ -74,6 +74,7 @@ export default function PoseCameraScreen() {
       const uri = photo.path.startsWith('file://') ? photo.path : `file://${photo.path}`;
 
       const results = await PoseDetection.detectPose(uri);
+      console.log('Joint angles:', getPoseAngles(results));
 
       setPhotoUri(uri);
       setImageSize({ width: photo.width, height: photo.height });
@@ -141,6 +142,21 @@ export default function PoseCameraScreen() {
   // Only render landmarks the model is confident are visible in the frame
   const visibleLandmarks = landmarks.filter(lm => lm.inFrameLikelihood > 0.5);
   const landmarkMap = new Map(visibleLandmarks.map(lm => [lm.type, lm]));
+
+  // Map landmark type index → angle value for joints that have an angle
+  const poseAngles = getPoseAngles(landmarks);
+  const angleAtJoint = new Map<number, number>([
+    [11, poseAngles?.leftShoulder],
+    [12, poseAngles?.rightShoulder],
+    [13, poseAngles?.leftElbow],
+    [14, poseAngles?.rightElbow],
+    [23, poseAngles?.leftHip],
+    [24, poseAngles?.rightHip],
+    [25, poseAngles?.leftKnee],
+    [26, poseAngles?.rightKnee],
+    [27, poseAngles?.leftAnkle],
+    [28, poseAngles?.rightAnkle],
+  ].filter((entry): entry is [number, number] => entry[1] !== undefined));
 
   // ── Permission gates ────────────────────────────────────────────────────────
 
@@ -221,6 +237,24 @@ export default function PoseCameraScreen() {
                 strokeWidth={1.5}
               />
             ))}
+            {visibleLandmarks.map(lm => {
+              const angle = angleAtJoint.get(lm.type);
+              if (angle === undefined) return null;
+              return (
+                <SvgText
+                  key={`angle-${lm.type}`}
+                  x={scaleX(lm.x) + 8}
+                  y={scaleY(lm.y) - 8}
+                  fontSize={12}
+                  fontWeight="bold"
+                  fill="#FFFF00"
+                  stroke="#000000"
+                  strokeWidth={0.5}
+                >
+                  {Math.round(angle)}°
+                </SvgText>
+              );
+            })}
           </Svg>
         </ViewShot>
       )}
