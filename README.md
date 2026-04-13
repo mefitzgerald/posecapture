@@ -199,3 +199,49 @@ const hipAngle = getAngle(rightShoulder, rightHip, rightKnee);
 ## How it works
 
 The module uses ML Kit's **Accurate Pose Detector** (`SINGLE_IMAGE_MODE`) which runs entirely on-device. EXIF rotation metadata is read automatically, so landmarks are always returned in the visually-correct upright image space regardless of how the camera sensor stored the raw pixels.
+
+---
+
+## Demo app (posecapture)
+
+This repository includes a demo Expo app in the root that shows the module in action. It captures a photo using the device camera, runs pose detection, and renders a skeleton overlay with joint angle labels on the result.
+
+### Demo dependencies
+
+The demo app uses the following packages which you need to install separately:
+
+```bash
+npx expo install react-native-vision-camera
+npx expo install react-native-svg
+npx expo install react-native-view-shot
+npx expo install expo-media-library
+```
+
+### Running the demo
+
+1. Clone this repository:
+
+```bash
+git clone https://github.com/mefitzgerald/posecapture.git
+cd expo-pose-detection
+```
+
+2. Install dependencies:
+
+```bash
+npm install
+```
+
+3. Build and run on an Android device or emulator:
+
+```bash
+npx expo run:android
+```
+
+### What the demo does
+
+- Opens a live camera preview using `react-native-vision-camera`
+- Tap **Detect** to capture a photo and run ML Kit pose detection
+- Displays the photo with a red skeleton overlay and cyan dots at each landmark
+- Shows the joint angle (in degrees) at each major joint
+- Tap **Save** to export the annotated image to the device gallery using `expo-media-library`
