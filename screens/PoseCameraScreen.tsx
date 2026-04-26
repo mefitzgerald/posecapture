@@ -25,7 +25,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Camera, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
+import { Camera, useCameraDevice } from 'react-native-vision-camera';
 import * as MediaLibrary from 'expo-media-library';
 import Svg, { Circle, Line, Text as SvgText } from 'react-native-svg';
 import ViewShot from 'react-native-view-shot';
@@ -38,15 +38,18 @@ const SCREEN = Dimensions.get('window');
 
 type Mode = 'camera' | 'preview';
 
-export default function PoseCameraScreen() {
-  // Camera permissions (vision-camera) and media library permissions (saving)
-  const { hasPermission, requestPermission } = useCameraPermission();
+type PoseCameraScreenProps = {
+  onBack?: () => void;
+};
+
+export default function PoseCameraScreen({ onBack }: PoseCameraScreenProps) {
+  // Media library permissions (saving)
   const [mediaPermission, requestMediaPermission] = MediaLibrary.usePermissions();
 
-  // facing controls which physical camera is used; device is the resolved handle
-  const [facing, setFacing] = useState<'back' | 'front'>('back');
-  const device = useCameraDevice(facing);
+  // Use the back camera for this flow.
+  const device = useCameraDevice('back');
 
+  // Refs to the Camera and ViewShot components so we can call methods on them
   const cameraRef = useRef<Camera>(null);
   const viewShotRef = useRef<ViewShot>(null);
 
@@ -158,19 +161,6 @@ export default function PoseCameraScreen() {
     [28, poseAngles?.rightAnkle],
   ].filter((entry): entry is [number, number] => entry[1] !== undefined));
 
-  // ── Permission gates ────────────────────────────────────────────────────────
-
-  if (!hasPermission) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.message}>Camera permission is required.</Text>
-        <TouchableOpacity style={styles.btn} onPress={requestPermission}>
-          <Text style={styles.btnText}>Grant Permission</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
   if (!device) {
     return (
       <View style={styles.center}>
@@ -275,18 +265,23 @@ export default function PoseCameraScreen() {
                 ? <ActivityIndicator color="#fff" />
                 : <Text style={styles.actionBtnText}>Save</Text>}
             </TouchableOpacity>
-            <View style={styles.iconBtn}>
-              <Text style={styles.badgeText}>{visibleLandmarks.length} pts</Text>
-            </View>
+            {visibleLandmarks.length > 0 ? (
+              <View style={styles.iconBtn}>
+                <Text style={styles.badgeText}>{visibleLandmarks.length} pts</Text>
+              </View>
+            ) : (
+              <View style={styles.iconBtnSpacer} />
+            )}
           </>
         ) : (
           <>
-            <TouchableOpacity
-              style={styles.iconBtn}
-              onPress={() => setFacing(f => (f === 'back' ? 'front' : 'back'))}
-            >
-              <Text style={styles.iconText}>Flip</Text>
-            </TouchableOpacity>
+            {onBack ? (
+              <TouchableOpacity style={styles.iconBtn} onPress={onBack}>
+                <Text style={styles.iconText}>Back</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.iconBtnSpacer} />
+            )}
             <TouchableOpacity
               style={[styles.actionBtn, styles.detectBtn, detecting && styles.actionBtnBusy]}
               onPress={handleDetect}
@@ -297,7 +292,7 @@ export default function PoseCameraScreen() {
                 : <Text style={styles.actionBtnText}>Detect</Text>}
             </TouchableOpacity>
             {/* Spacer keeps the Detect button centred */}
-            <View style={styles.iconBtn} />
+            <View style={styles.iconBtnSpacer} />
           </>
         )}
       </View>
@@ -333,10 +328,7 @@ const styles = StyleSheet.create({
 
   // Small circular buttons (Flip / Back / badge)
   iconBtn:   { width: 56, height: 56, borderRadius: 28, backgroundColor: '#00000066', alignItems: 'center', justifyContent: 'center' },
+  iconBtnSpacer: { width: 56, height: 56 },
   iconText:  { color: '#fff', fontSize: 12, fontWeight: '600' },
   badgeText: { color: '#00E5FF', fontSize: 12, fontWeight: '600' },
-
-  // Permission screen
-  btn:     { backgroundColor: '#00E5FF', paddingVertical: 12, paddingHorizontal: 24, borderRadius: 8 },
-  btnText: { fontWeight: '700', fontSize: 15 },
 });
