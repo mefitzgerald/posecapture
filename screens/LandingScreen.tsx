@@ -47,7 +47,7 @@ export default function LandingScreen({ onContinue }: LandingScreenProps) {
     <View style={styles.container}>
       <Text style={styles.title}>Pose Capture</Text>
       <Text style={styles.subtitle}>
-        Grant camera permission before opening the live preview.
+        Expo ML Kit Demo
       </Text>
 
       <TouchableOpacity

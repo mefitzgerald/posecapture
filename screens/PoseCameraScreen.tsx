@@ -48,6 +48,7 @@ export default function PoseCameraScreen({ onBack }: PoseCameraScreenProps) {
 
   // Use the back camera for this flow.
   const device = useCameraDevice('back');
+  const [cameraError, setCameraError] = useState<string | null>(null);
 
   // Refs to the Camera and ViewShot components so we can call methods on them
   const cameraRef = useRef<Camera>(null);
@@ -61,6 +62,15 @@ export default function PoseCameraScreen({ onBack }: PoseCameraScreenProps) {
   const [viewLayout, setViewLayout] = useState({ width: SCREEN.width, height: SCREEN.height });
   const [detecting, setDetecting] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  const handleCameraError = useCallback((error: any) => {
+    const isRestricted = error?.code === 'system/camera-is-restricted';
+    const message = isRestricted
+      ? 'Camera is currently restricted by the operating system. Close other camera apps or check device policy, then retry.'
+      : (error?.message ?? 'Camera error');
+
+    setCameraError(message);
+  }, []);
 
   /**
    * Captures a still photo and runs ML Kit pose detection on it.
@@ -169,6 +179,24 @@ export default function PoseCameraScreen({ onBack }: PoseCameraScreenProps) {
     );
   }
 
+  if (cameraError) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.message}>{cameraError}</Text>
+        <View style={styles.errorActions}>
+          <TouchableOpacity style={styles.btn} onPress={() => setCameraError(null)}>
+            <Text style={styles.btnText}>Retry</Text>
+          </TouchableOpacity>
+          {onBack && (
+            <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={onBack}>
+              <Text style={styles.btnText}>Back</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    );
+  }
+
   const isPreview = mode === 'preview';
 
   return (
@@ -184,6 +212,7 @@ export default function PoseCameraScreen({ onBack }: PoseCameraScreenProps) {
         device={device}
         isActive={!isPreview}
         photo={true}
+        onError={handleCameraError}
       />
 
       {/* Preview: captured photo with SVG skeleton drawn on top */}
@@ -307,6 +336,7 @@ const styles = StyleSheet.create({
   hidden:    { display: 'none' },
   center:    { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   message:   { fontSize: 16, textAlign: 'center', marginBottom: 16 },
+  errorActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
 
   controls: {
     position: 'absolute',
@@ -331,4 +361,8 @@ const styles = StyleSheet.create({
   iconBtnSpacer: { width: 56, height: 56 },
   iconText:  { color: '#fff', fontSize: 12, fontWeight: '600' },
   badgeText: { color: '#00E5FF', fontSize: 12, fontWeight: '600' },
+
+  btn: { backgroundColor: '#00E5FF', paddingVertical: 12, paddingHorizontal: 18, borderRadius: 10 },
+  btnSecondary: { backgroundColor: '#334155' },
+  btnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
 });
