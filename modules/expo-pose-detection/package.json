@@ -1,0 +1,37 @@
+{
+  "name": "@mefitzgerald/expo-pose-detection",
+  "version": "0.7.10",
+  "description": "Expo module for on-device ML Kit pose detection (Android)",
+  "main": "index.ts",
+  "types": "index.ts",
+  "files": [
+    "src/",
+    "android/src/",
+    "android/build.gradle",
+    "expo-module.config.json",
+    "index.ts"
+  ],
+  "scripts": {
+    "build": "expo-module build",
+    "clean": "expo-module clean"
+  },
+  "keywords": [
+    "expo",
+    "expo-module",
+    "pose-detection",
+    "ml-kit",
+    "android",
+    "react-native"
+  ],
+  "peerDependencies": {
+    "expo": ">=52.0.0"
+  },
+  "devDependencies": {
+    "expo-module-scripts": "^4.0.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mefitzgerald/posecapture"
+  }
+}

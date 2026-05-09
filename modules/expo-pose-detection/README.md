@@ -34,10 +34,10 @@ npx expo install react-native-vision-camera
 
 ## Installation
 
-Install directly from GitHub using the Expo CLI:
+Install from npm using the Expo CLI:
 
 ```bash
-npx expo install github:mefitzgerald/posecapture#subdirectory=modules/expo-pose-detection
+npx expo install @mefitzgerald/expo-pose-detection
 ```
 
 Because this module contains native code you need to rebuild your app after installing:
